@@ -10,3 +10,5 @@ reqwest = { version = "0.11", features = ["blocking", "json", "cookies"] }
 regex = "1"
 lazy_static = "1.4"
 dotenv_codegen = "0.15"
+quick-xml = { version = "0.26", features = ["serialize"] }
+
