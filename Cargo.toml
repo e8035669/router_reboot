@@ -12,4 +12,6 @@ lazy_static = "1.4"
 dotenv_codegen = "0.15"
 quick-xml = { version = "0.26", features = ["serialize"] }
 serde = { version = "1.0", features = ["derive"] }
+ring = "0.16"
+hex = "0.4"
 

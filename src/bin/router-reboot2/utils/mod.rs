@@ -3,7 +3,15 @@ use quick_xml::reader::Reader;
 use quick_xml::writer::Writer;
 use quick_xml::Error as XmlError;
 use reqwest::blocking::Client;
+use serde::{Deserialize, Serialize};
 use std::error::Error;
+
+mod soap;
+mod body;
+mod loginbody;
+pub use soap::*;
+pub use body::*;
+pub use loginbody::*;
 
 pub struct DLinkRouter {
     client: Client,
@@ -19,10 +27,6 @@ impl DLinkRouter {
     }
 
     pub fn login(&mut self, password: &str) -> Result<(), Box<dyn Error>> {
-
-
-
-
         Ok(())
     }
 }
