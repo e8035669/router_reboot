@@ -14,4 +14,11 @@ quick-xml = { version = "0.26", features = ["serialize"] }
 serde = { version = "1.0", features = ["derive"] }
 ring = "0.16"
 hex = "0.4"
+reqwest_cookie_store = "0.4"
+cookie_store = "0.16.0"
+url = "2.3"
+chrono = "0.4"
+ctr = "0.9"
+aes = "0.8"
+block-padding = "0.3"
 

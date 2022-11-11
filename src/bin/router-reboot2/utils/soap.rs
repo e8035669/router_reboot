@@ -1,26 +1,29 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, PartialEq, Serialize, Deserialize, Default)]
-pub struct Value {
-    #[serde(rename = "$value")]
-    pub value: String,
-}
+#[derive(Debug, PartialEq, Serialize, Deserialize, Default, Clone)]
+pub struct Empty;
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Default, Clone)]
+pub struct Value(pub String);
 
 impl Value {
-    pub fn empty() -> Self {
-        Self {
-            value: String::new(),
-        }
-    }
-
     pub fn new(value: &str) -> Self {
         Self {
-            value: value.to_owned(),
+            0: value.to_owned(),
         }
     }
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Default, Clone)]
+pub struct Val<T>(pub T);
+
+impl<T> Val<T> {
+    pub fn new(value: T) -> Self {
+        Self { 0: value }
+    }
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Default, Clone)]
 #[serde(rename = "soap:Envelope")]
 pub struct SoapEnvelope<T> {
     #[serde(rename = "xmlns:xsi")]

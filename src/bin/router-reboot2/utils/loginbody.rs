@@ -2,7 +2,7 @@ use serde::{Serialize, Deserialize};
 
 use crate::utils::Value;
 
-#[derive(Debug, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Default, Clone)]
 pub struct Login {
     #[serde(rename = "Action")]
     pub action: Value,
@@ -33,20 +33,20 @@ impl Login {
     }
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Default, Clone)]
 pub struct LoginResponse {
     #[serde(rename = "LoginResult")]
     pub login_result: Value,
     #[serde(rename = "Challenge")]
-    pub challenge: Value,
+    pub challenge: Option<Value>,
     #[serde(rename = "Cookie")]
-    pub cookie: Value,
+    pub cookie: Option<Value>,
     #[serde(rename = "PublicKey")]
-    pub public_key: Value,
+    pub public_key: Option<Value>,
     #[serde(rename = "BackOff")]
     pub back_off: Value,
     #[serde(rename = "Crypto")]
-    pub crypto: Value,
+    pub crypto: Option<Value>,
     #[serde(rename = "LockRemaining")]
     pub lock_remaining: Value,
     #[serde(rename = "BackOffRemaining")]
