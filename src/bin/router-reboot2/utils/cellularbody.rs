@@ -17,7 +17,7 @@ pub struct Inbox {
     pub index: Value,
     #[serde(rename = "Read")]
     pub read: Value,
-    #[serde(rename = "TimeStamp")]
+    #[serde(rename = "Timestamp")]
     pub timestamp: Value,
     #[serde(rename = "PhoneNumber")]
     pub phone_number: Value,
@@ -27,7 +27,7 @@ pub struct Inbox {
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Default, Clone)]
 pub struct InboxList {
-    #[serde(rename = "InboxList")]
+    #[serde(rename = "Inbox")]
     pub items: Vec<Inbox>,
 }
 
@@ -39,7 +39,7 @@ pub struct SmsMessageSummary {
     pub received_number: Value,
     #[serde(rename = "SentNumber")]
     pub sent_number: Value,
-    #[serde(rename = "RemainNumber")]
+    #[serde(rename = "RemainingNumber")]
     pub remain_number: Value,
 }
 

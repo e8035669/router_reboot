@@ -1,10 +1,18 @@
 use cookie_store::Cookie;
+use ctr::cipher::{KeyIvInit, StreamCipher};
 use hex;
+use hmac::{Hmac, Mac};
+use inout::block_padding::generic_array::typenum;
+use inout::block_padding::Pkcs7;
+use inout::InOutBufReserved;
+use md5::{Digest, Md5};
 use quick_xml::{de, se};
+use rand::rngs::OsRng;
+use rand::RngCore;
 use reqwest::blocking::Client;
 use reqwest::header;
 use reqwest_cookie_store::CookieStoreMutex;
-use ring::hmac;
+use sha2::Sha256;
 use std::error::Error;
 use std::sync::Arc;
 use std::time;
@@ -14,12 +22,44 @@ use crate::utils::body::{LoginEnvelop, ResponseEnvelop};
 use crate::utils::soap::SoapEnvelope;
 use crate::utils::{CellularSmsMessageEnvelop, CellularSmsMessageResponseEnvelop, SmsMessage};
 
+type Aes256Ctr64BE = ctr::Ctr64BE<aes::Aes256>;
+type HmacSha256 = Hmac<Sha256>;
+
+fn aes_ctr_encrypt(message: &[u8], key: &[u8]) -> Result<String, Box<dyn Error>> {
+    let mut iv = [0u8; 16];
+    OsRng.fill_bytes(&mut iv);
+
+    let mut buffer = message.to_vec();
+    let msg_len = buffer.len();
+    let new_len = (msg_len / 16 + 1) * 16;
+    buffer.resize(new_len, 0);
+
+    let inout = InOutBufReserved::from_mut_slice(buffer.as_mut_slice(), msg_len)?;
+    let mut blocks = inout.into_padded_blocks::<Pkcs7, typenum::U16>()?;
+
+    let mut cipher = Aes256Ctr64BE::new(key.into(), &iv.into());
+
+    for block in blocks.get_blocks() {
+        cipher.apply_keystream_inout(block.into_buf());
+    }
+
+    if let Some(block) = blocks.get_tail_block() {
+        cipher.apply_keystream_inout(block.into_buf());
+    }
+
+    Ok(format!(
+        "{} {}",
+        hex::encode_upper(buffer),
+        hex::encode_upper(iv)
+    ))
+}
+
 pub struct DLinkRouter {
     client: Client,
     cookie_store: Arc<CookieStoreMutex>,
     api_url: String,
     private_key_str: String,
-    private_key: hmac::Key,
+    private_key: Vec<u8>,
 }
 
 impl DLinkRouter {
@@ -44,7 +84,7 @@ impl DLinkRouter {
             cookie_store,
             api_url: api_url.to_string(),
             private_key_str: default_key.to_string(),
-            private_key: hmac::Key::new(hmac::HMAC_SHA256, default_key.as_bytes()),
+            private_key: Vec::new(),
         })
     }
 
@@ -75,31 +115,38 @@ impl DLinkRouter {
             resp1.public_key.ok_or("Expect public_key")?.0,
             password
         );
-        let key1 = hmac::Key::new(hmac::HMAC_SHA256, passwd.as_bytes());
-        let sign1 = hmac::sign(
-            &key1,
-            resp1
-                .challenge
-                .as_ref()
-                .ok_or("Expect challenge")?
-                .0
-                .as_bytes(),
-        );
-        let t_msg = hex::encode_upper(sign1.as_ref());
+        let key1 = passwd.as_bytes();
+        let sign1 = HmacSha256::new_from_slice(key1)?
+            .chain_update(
+                resp1
+                    .challenge
+                    .as_ref()
+                    .ok_or("Expect challenge")?
+                    .0
+                    .as_bytes(),
+            )
+            .finalize()
+            .into_bytes()
+            .to_vec();
+        let t_msg = hex::encode_upper(sign1);
 
         self.private_key_str = t_msg.clone();
-        let key2 = hmac::Key::new(hmac::HMAC_SHA256, t_msg.as_bytes());
-        self.private_key = key2.clone();
-        let sign2 = hmac::sign(
-            &key2,
-            resp1
-                .challenge
-                .as_ref()
-                .ok_or("Expect challenge")?
-                .0
-                .as_bytes(),
-        );
-        let l_msg = hex::encode_upper(sign2.as_ref());
+        let key2 = t_msg.as_bytes();
+        self.private_key = key2.to_vec();
+        let sign2 = HmacSha256::new_from_slice(key2)?
+            .chain_update(
+                resp1
+                    .challenge
+                    .as_ref()
+                    .ok_or("Expect challenge")?
+                    .0
+                    .as_bytes(),
+            )
+            .finalize()
+            .into_bytes()
+            .to_vec();
+
+        let l_msg = hex::encode_upper(sign2);
 
         let cookie = resp1.cookie.ok_or("Expect cookie")?.0;
         self.update_uid(&cookie.as_str())?;
@@ -142,10 +189,23 @@ impl DLinkRouter {
 
         let message = format!("{}{}", h, "GetCellularSmsMessage");
         println!("Message: {}", message);
-        let sign = hmac::sign(&self.private_key, message.as_bytes());
-        let e = hex::encode_upper(sign.as_ref());
+        let sign = HmacSha256::new_from_slice(&self.private_key.as_slice())?
+            .chain_update(message.as_bytes())
+            .finalize()
+            .into_bytes()
+            .to_vec();
+        let e = hex::encode_upper(sign);
         let auth = format!("{} {}", e, h);
         println!("auth: {}", auth);
+
+        let md5sum = Md5::new()
+            .chain_update(req_ser.as_bytes())
+            .finalize()
+            .to_vec();
+        let api_content = aes_ctr_encrypt(
+            hex::encode_upper(md5sum).as_bytes(),
+            hex::decode(self.private_key_str.as_bytes())?.as_slice(),
+        )?;
 
         let ret = self
             .client
@@ -153,13 +213,13 @@ impl DLinkRouter {
             .body(req_ser)
             .header("API-ACTION", "GetCellularSmsMessage")
             .header("API-AUTH", auth)
+            .header("API-CONTENT", api_content)
             .send()?
             .error_for_status()?;
         println!("Ret: {:?}", ret);
         let text = ret.text()?;
         println!("text: {}", text);
-        let env: SoapEnvelope<CellularSmsMessageResponseEnvelop> =
-            de::from_str(text.as_str())?;
+        let env: SoapEnvelope<CellularSmsMessageResponseEnvelop> = de::from_str(text.as_str())?;
         let body = env.body.response;
 
         if body.result.0 == "OK" {
