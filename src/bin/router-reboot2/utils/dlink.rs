@@ -96,6 +96,44 @@ impl DLinkRouter {
         Ok(())
     }
 
+    fn send_soap_action(&self, action_name: &str, body: &[u8]) -> Result<String, Box<dyn Error>> {
+        let h = time::SystemTime::now()
+            .duration_since(time::UNIX_EPOCH)?
+            .as_millis();
+        let h = (h % 2000000000000u128).to_string();
+
+        let auth_msg = format!("{}{}", h, action_name);
+        // println!("Message: {}", auth_msg);
+        let sign = HmacSha256::new_from_slice(&self.private_key.as_slice())?
+            .chain_update(auth_msg.as_bytes())
+            .finalize()
+            .into_bytes()
+            .to_vec();
+        let e = hex::encode_upper(sign);
+        let auth = format!("{} {}", e, h);
+        // println!("auth: {}", auth);
+
+        let md5sum = Md5::new().chain_update(body).finalize().to_vec();
+        let api_content = aes_ctr_encrypt(
+            hex::encode_upper(md5sum).as_bytes(),
+            hex::decode(self.private_key_str.as_bytes())?.as_slice(),
+        )?;
+
+        let ret = self
+            .client
+            .post(&self.api_url)
+            .body(body.to_owned())
+            .header("API-ACTION", action_name)
+            .header("API-AUTH", auth)
+            .header("API-CONTENT", api_content)
+            .send()?
+            .error_for_status()?;
+        // println!("Ret: {:?}", ret);
+        let text = ret.text()?;
+        // println!("text: {}", text);
+        Ok(text)
+    }
+
     pub fn login(&mut self, password: &str) -> Result<(), Box<dyn Error>> {
         let login_request = SoapEnvelope::new(LoginEnvelop::with_request());
         let ser1 = se::to_string(&login_request)?;
@@ -180,45 +218,10 @@ impl DLinkRouter {
     pub fn get_sms(&mut self) -> Result<SmsMessage, Box<dyn Error>> {
         let req = SoapEnvelope::new(CellularSmsMessageEnvelop::default());
         let req_ser = se::to_string(&req)?;
-        println!("{:?}", req_ser);
+        // println!("{:?}", req_ser);
 
-        let h = time::SystemTime::now()
-            .duration_since(time::UNIX_EPOCH)?
-            .as_millis();
-        let h = (h % 2000000000000u128).to_string();
+        let text = self.send_soap_action("GetCellularSmsMessage", req_ser.as_bytes())?;
 
-        let message = format!("{}{}", h, "GetCellularSmsMessage");
-        println!("Message: {}", message);
-        let sign = HmacSha256::new_from_slice(&self.private_key.as_slice())?
-            .chain_update(message.as_bytes())
-            .finalize()
-            .into_bytes()
-            .to_vec();
-        let e = hex::encode_upper(sign);
-        let auth = format!("{} {}", e, h);
-        println!("auth: {}", auth);
-
-        let md5sum = Md5::new()
-            .chain_update(req_ser.as_bytes())
-            .finalize()
-            .to_vec();
-        let api_content = aes_ctr_encrypt(
-            hex::encode_upper(md5sum).as_bytes(),
-            hex::decode(self.private_key_str.as_bytes())?.as_slice(),
-        )?;
-
-        let ret = self
-            .client
-            .post(&self.api_url)
-            .body(req_ser)
-            .header("API-ACTION", "GetCellularSmsMessage")
-            .header("API-AUTH", auth)
-            .header("API-CONTENT", api_content)
-            .send()?
-            .error_for_status()?;
-        println!("Ret: {:?}", ret);
-        let text = ret.text()?;
-        println!("text: {}", text);
         let env: SoapEnvelope<CellularSmsMessageResponseEnvelop> = de::from_str(text.as_str())?;
         let body = env.body.response;
 
