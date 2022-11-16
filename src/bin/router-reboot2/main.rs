@@ -12,8 +12,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     dlink.login(dlink_loginpw)?;
     println!("Login success");
 
+    /*
     let sms = dlink.get_sms()?;
     println!("SMS:\n{}", sms);
+    */
+
+    dlink.reboot()?;
+    println!("Send reboot success");
 
     Ok(())
 }

@@ -21,6 +21,7 @@ use url::Url;
 use crate::utils::body::{LoginEnvelop, ResponseEnvelop};
 use crate::utils::soap::SoapEnvelope;
 use crate::utils::{CellularSmsMessageEnvelop, CellularSmsMessageResponseEnvelop, SmsMessage};
+use crate::utils::{RebootEnvelop, RebootReponseEnvelop};
 
 type Aes256Ctr64BE = ctr::Ctr64BE<aes::Aes256>;
 type HmacSha256 = Hmac<Sha256>;
@@ -229,6 +230,22 @@ impl DLinkRouter {
             Ok(body.sms_message.ok_or("Expect SmsMessage")?)
         } else {
             Err(Box::from(format!("Response is not OK: {:?}", body)))
+        }
+    }
+
+    pub fn reboot(&mut self) -> Result<(), Box<dyn Error>> {
+        let req = SoapEnvelope::new(RebootEnvelop::default());
+        let req_ser = se::to_string(&req)?;
+
+        let text = self.send_soap_action("Reboot", req_ser.as_bytes())?;
+
+        let env: SoapEnvelope<RebootReponseEnvelop> = de::from_str(text.as_str())?;
+        let body = env.body.response;
+
+        if body.result.0 == "REBOOT" {
+            Ok(())
+        } else {
+            Err(format!("Response is not REBOOT: {:?}", body).into())
         }
     }
 }

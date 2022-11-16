@@ -18,6 +18,7 @@ impl Value {
 pub struct Val<T>(pub T);
 
 impl<T> Val<T> {
+    #[allow(dead_code)]
     pub fn new(value: T) -> Self {
         Self { 0: value }
     }
