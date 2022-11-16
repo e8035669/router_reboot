@@ -216,6 +216,7 @@ impl DLinkRouter {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_sms(&mut self) -> Result<SmsMessage, Box<dyn Error>> {
         let req = SoapEnvelope::new(CellularSmsMessageEnvelop::default());
         let req_ser = se::to_string(&req)?;
@@ -233,6 +234,7 @@ impl DLinkRouter {
         }
     }
 
+    #[allow(dead_code)]
     pub fn reboot(&mut self) -> Result<(), Box<dyn Error>> {
         let req = SoapEnvelope::new(RebootEnvelop::default());
         let req_ser = se::to_string(&req)?;
